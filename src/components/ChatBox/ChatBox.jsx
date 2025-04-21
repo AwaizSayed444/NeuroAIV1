@@ -34,7 +34,7 @@ const ChatBox = (props) => {
     const lowerCaseValue = value.toLowerCase();
   
     // If it's the first message and contains a greeting, respond accordingly
-    if (greetings.some((greet) => lowerCaseValue.includes(greet))) {
+    if (isFirstMessage && greetings.includes(lowerCaseValue.trim())) {
       const greetingResponse = {
         text: isFirstMessage
           ? "Hi there! 😊 Tell me more about how you're feeling today."

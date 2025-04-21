@@ -5,21 +5,48 @@ import axios from "axios";
 const ChatContainer = (props) => {
   useEffect(() => {
     const getResponse = async () => {
-      const data = await axios.get("https://picsum.photos/v2/list"); //Attach Backend link here
-      const url = data.data[Math.floor(Math.random() * 30)].download_url;
-      console.log("Fetched image URL:", url);
-
-      const add = { text: url, type: "bot" };
-      const newMessage = [...props.valueArr, add];
+      if (!props.value) return; // No user input
+  
+      // Check if the user wants to exit (this is handled in ChatBox now)
+      if (["exit", "quit", "stop", "end"].includes(props.value.toLowerCase())) {
+        const addReply = {
+          text: "The conversation has ended. Thank you for chatting!",
+          type: "bot",
+        };
+        const newMessage = [...props.valueArr, addReply];
+        props.setValueArr(newMessage);
+        props.setButtonState(true); // Disable input after exit
+        return;
+      }
+  
+      // Send the user input to the backend for prediction
+      const data = await axios.post("http://localhost:8000/predict", {
+        message: props.value,
+      });
+  
+      const { reply, questions, finished } = data.data;
+  
+      // Add the bot's reply to the chat
+      const addReply = { text: reply, type: "bot" };
+      const newMessage = [...props.valueArr, addReply];
       props.setValueArr(newMessage);
+  
+      if (!finished) {
+        // If more questions are available, continue asking
+        const nextMessage = questions.length > 0 ? questions[0] : "";
+        if (nextMessage) {
+          const addQuestion = { text: nextMessage, type: "bot" };
+          const newMessageWithQuestion = [...newMessage, addQuestion];
+          props.setValueArr(newMessageWithQuestion);
+        }
+      }
     };
-
-    if (!props.inputValue && props.value) {
+  
+    if (props.value && !props.inputValue) {
       getResponse();
       props.setButtonState(false);
     }
-  }, [props.inputValue, props.value]);
-
+  }, [props.value, props.inputValue]);
   return (
     <>
       <div

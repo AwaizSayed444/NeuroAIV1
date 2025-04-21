@@ -59,6 +59,11 @@ for entry in raw_data:
         if all_qs:
             question_data[category] = all_qs
 
+# ------------------- Helper: Check Meaningful Input -------------------
+def is_meaningful_input(text):
+    generic_greetings = {"hi", "hello", "hey", "good morning", "good evening", "how are you", "what's up"}
+    return text.lower().strip() not in generic_greetings and len(text.strip()) > 5
+
 # ------------------- Mood Detection Functions -------------------
 def detect_mood_keywords(text):
     text = text.lower()
@@ -103,13 +108,19 @@ def predict_route():
     if not user_input:
         return jsonify({"error": "Message cannot be empty"}), 400
 
+    if not is_meaningful_input(user_input):
+        return jsonify({
+            "reply": "Hi there! 😊 Tell me more about how you're feeling today.",
+            "finished": False
+        }), 200
+
     mood, confidence = predict_mood(user_input)
     questions = fetch_questions(mood)
 
-    if not questions:
+    if not questions or confidence < 0.5:  # low confidence OR no relevant questions
         return jsonify({
-            "reply": f"I'm here for you. Let's talk more about feeling {mood.lower()}.",
-            "finished": True
+            "reply": "Thanks for sharing! Tell me more about how you're feeling or what’s on your mind.",
+            "finished": False
         }), 200
 
     return jsonify({
@@ -133,12 +144,24 @@ def next_question():
             "finished": True
         })
 
+    # If user shared something new and no more questions are left, re-evaluate mood
     if not questions or len(questions) <= 1:
+        new_mood, conf = predict_mood(answer)
+        new_questions = fetch_questions(new_mood)
+
+        if not new_questions:
+            return jsonify({
+                "reply": f"I'm here for you. Let's talk more about feeling {new_mood.lower()}.",
+                "finished": True
+            })
+
         return jsonify({
-            "reply": "You've answered all the available questions. Type 'exit' to end or feel free to share more.",
+            "reply": f"It seems you're feeling {new_mood.lower()}. Here's a question for you:\n1. {new_questions[0]}",
+            "questions": new_questions,
             "finished": False
         })
 
+    # Continue with the remaining questions
     remaining_questions = questions[1:]
     return jsonify({
         "reply": remaining_questions[0],

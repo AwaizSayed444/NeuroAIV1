@@ -114,15 +114,30 @@ def predict_route():
             "finished": False
         }), 200
 
+    # --- Predict mood and log it ---
     mood, confidence = predict_mood(user_input)
+    print(f"🧠 Predicted mood: {mood}, Confidence: {confidence:.2f}")
+
     questions = fetch_questions(mood)
 
-    if not questions or confidence < 0.5:  # low confidence OR no relevant questions
-        return jsonify({
-            "reply": "Thanks for sharing! Tell me more about how you're feeling or what’s on your mind.",
-            "finished": False
-        }), 200
+    # --- If confidence is low or no questions, use fallback ---
+    if not questions or confidence < 0.3:
+        fallback_mood = "depression & anxiety"
+        fallback_questions = fetch_questions(fallback_mood)
 
+        if fallback_questions:
+            return jsonify({
+                "reply": f"It sounds like you're going through something difficult. Let's talk about it.\n1. {fallback_questions[0]}",
+                "questions": fallback_questions,
+                "finished": False
+            }), 200
+        else:
+            return jsonify({
+                "reply": "Thanks for sharing. Tell me more about how you're feeling or what’s on your mind.",
+                "finished": False
+            }), 200
+
+    # --- Valid mood and questions ---
     return jsonify({
         "reply": f"It seems you're feeling {mood.lower()}. Let's explore further:\n1. {questions[0]}",
         "questions": questions,

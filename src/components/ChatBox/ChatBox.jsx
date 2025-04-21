@@ -4,11 +4,13 @@ import styles from "./ChatBox.module.css";
 import ChatContainer from "./ChatContainer/ChatContainer";
 
 const ChatBox = (props) => {
+  const [questions, setQuestions] = useState([]);
   const [value, setValue] = useState("");
   const [addArr, setAddArr] = useState({});
   const [buttonState, setButtonState] = useState(false);
   const [isSessionActive, setIsSessionActive] = useState(true); // <-- NEW
-
+  const [isFirstMessage, setIsFirstMessage] = useState(true); // track greeting
+  
   const onChangeHandler = (e) => {
     setValue(e.target.value);
     props.setValue(e.target.value);
@@ -27,6 +29,28 @@ const ChatBox = (props) => {
     props.setValueArr(updatedMessages);
     setValue(""); // Clear input
     setButtonState(true);
+  
+    const greetings = ["hi", "hello", "hey", "good morning", "good evening", "howdy"];
+    const lowerCaseValue = value.toLowerCase();
+  
+    // If it's the first message and contains a greeting, respond accordingly
+    if (greetings.some((greet) => lowerCaseValue.includes(greet))) {
+      const greetingResponse = {
+        text: isFirstMessage
+          ? "Hi there! 😊 Tell me more about how you're feeling today."
+          : "Welcome back! Ready to continue?",
+        type: "bot",
+      };
+      props.setValueArr((prev) => [...prev, greetingResponse]);
+      setIsFirstMessage(false);
+      setButtonState(false);
+      return;
+    }
+  
+    // If the session is not active, don't send further messages
+    if (!isSessionActive) {
+      return;
+    }
   
     // Send to backend
     try {
@@ -47,14 +71,14 @@ const ChatBox = (props) => {
       ]);
   
       if (data.finished) {
-        // Only stop session if 'finished' is returned from the backend, and user has not explicitly ended the session
-        if (["exit", "quit", "stop", "end"].includes(value.toLowerCase())) {
+        // Only stop session if 'finished' is returned from the backend
+        if (["exit", "quit", "stop", "end", "bye"].includes(value.toLowerCase())) {
           setIsSessionActive(false); // ⛔️ Stop session
           setButtonState(true); // Lock input
         }
       } else {
         // Continue with next question set
-        if (data.questions) props.setQuestions(data.questions);
+        if (data.questions) setQuestions(data.questions); // instead of props.setQuestions
         setButtonState(false); // Allow next input
       }
     } catch (err) {
@@ -64,10 +88,16 @@ const ChatBox = (props) => {
 
   const restartSession = () => {
     setIsSessionActive(true);
+    setIsFirstMessage(true);
     setValue("");
+    props.setValue("");
     props.setValueArr([]);
-    props.setQuestions([]);
+    setQuestions([]); // use local state here instead
     setButtonState(false);
+  
+    setTimeout(() => {
+      document.querySelector("input.form-control")?.focus();
+    }, 0);
   };
 
   return (
@@ -85,13 +115,12 @@ const ChatBox = (props) => {
       <div className={`rounded p-1 ${styles.chatInputWrapper}`}>
         <form className="input-group" onSubmit={handleSend}>
           <input
+            key={isSessionActive ? "active" : "inactive"} // force rerender
             type="text"
             value={value}
             onChange={onChangeHandler}
-            className={`form-control  ${styles.chatInput}`}
-            placeholder={
-              isSessionActive ? "Enter here" : "Session ended. Click restart."
-            }
+            className={`form-control ${styles.chatInput}`}
+            placeholder={isSessionActive ? "Enter here" : "Session ended. Click restart."}
             disabled={!isSessionActive || buttonState}
           />
           <button
@@ -107,7 +136,7 @@ const ChatBox = (props) => {
 
       {!isSessionActive && (
         <button className="btn btn-outline-light mt-3" onClick={restartSession}>
-          Restart Session
+            Restart Session
         </button>
       )}
     </div>

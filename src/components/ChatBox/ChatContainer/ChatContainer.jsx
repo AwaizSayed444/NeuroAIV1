@@ -4,79 +4,95 @@ import axios from "axios";
 
 const ChatContainer = (props) => {
   useEffect(() => {
+    console.log("Triggered ChatContainer useEffect:", {
+      value: props.value,
+      inputValue: props.inputValue,
+      valueArr: props.valueArr,
+    });
     const getResponse = async () => {
-      if (!props.value) return; // No user input
+      if (!props.value?.trim()) return;
   
-      // Check if the user wants to exit (this is handled in ChatBox now)
-      if (["exit", "quit", "stop", "end"].includes(props.value.toLowerCase())) {
+      const exitCommands = ["exit", "quit", "stop", "end"];
+      const lowerValue = props.value.toLowerCase();
+  
+      if (exitCommands.includes(lowerValue)) {
         const addReply = {
           text: "The conversation has ended. Thank you for chatting!",
           type: "bot",
         };
-        const newMessage = [...props.valueArr, addReply];
+        const newMessage = [...(props.valueArr || []), addReply];
         props.setValueArr(newMessage);
-        props.setButtonState(true); // Disable input after exit
+  
+        // ONLY disable if it's not already reset
+        if (props.setButtonState) props.setButtonState(true);
         return;
       }
   
-      // Send the user input to the backend for prediction
-      const data = await axios.post("http://localhost:8000/predict", {
-        message: props.value,
-      });
+      // Prevent re-triggering when input is cleared
+      if (
+        props.inputValue || // block if still mid-typing
+        (Array.isArray(props.valueArr) &&
+          props.valueArr.length > 0 &&
+          props.valueArr[props.valueArr.length - 1]?.type === "bot")
+      ) {
+        return;
+      }
   
-      const { reply, questions, finished } = data.data;
+      try {
+        const data = await axios.post("http://localhost:8000/predict", {
+          message: props.value,
+        });
   
-      // Add the bot's reply to the chat
-      const addReply = { text: reply, type: "bot" };
-      const newMessage = [...props.valueArr, addReply];
-      props.setValueArr(newMessage);
+        const { reply, questions, finished } = data.data;
   
-      if (!finished) {
-        // If more questions are available, continue asking
-        const nextMessage = questions.length > 0 ? questions[0] : "";
-        if (nextMessage) {
-          const addQuestion = { text: nextMessage, type: "bot" };
-          const newMessageWithQuestion = [...newMessage, addQuestion];
-          props.setValueArr(newMessageWithQuestion);
+        const addReply = { text: reply, type: "bot" };
+        const newMessage = [...(props.valueArr || []), addReply];
+        props.setValueArr(newMessage);
+  
+        if (!finished && questions?.length > 0) {
+          const addQuestion = { text: questions[0], type: "bot" };
+          props.setValueArr([...newMessage, addQuestion]);
         }
+  
+        if (props.setButtonState) props.setButtonState(false); // ✅ Enable after bot responds
+      } catch (error) {
+        console.error("Error fetching response:", error);
       }
     };
   
-    if (props.value && !props.inputValue) {
+    // Only run when there is new input and it's not mid-typing
+    if (props.value && !props.inputValue && props.value.trim() !== "") {
       getResponse();
-      props.setButtonState(false);
     }
   }, [props.value, props.inputValue]);
   return (
-    <>
-      <div
-        className={`bg-dark mb-2 overflow-auto ${styles.chatContainer}`}
-        name="chatContainer"
-      >
-        {props.valueArr.map((msg, index) => (
-          <div
-            key={index}
-            className={`d-flex ${
-              msg.type === "user"
-                ? "justify-content-end"
-                : "justify-content-start"
+    <div
+      className={`bg-dark mb-2 overflow-auto ${styles.chatContainer}`}
+      name="chatContainer"
+    >
+      {props.valueArr?.map((msg, index) => (
+        <div
+          key={index}
+          className={`d-flex ${
+            msg.type === "user"
+              ? "justify-content-end"
+              : "justify-content-start"
+          }`}
+        >
+          <label
+            className={`p-2 my-2 rounded ${
+              msg.type === "user" ? "ms-3" : "me-3"
             }`}
+            style={{
+              color: "white",
+              backgroundColor: msg.type === "user" ? "#7b42dc" : "#1b67ae",
+            }}
           >
-            <label
-              className={`p-2 my-2 rounded ${
-                msg.type === "user" ? "ms-3" : "me-3"
-              }`}
-              style={{
-                color: "white",
-                backgroundColor: msg.type === "user" ? "#7b42dc" : "#1b67ae",
-              }}
-            >
-              {msg.text}
-            </label>
-          </div>
-        ))}
-      </div>
-    </>
+            {msg.text}
+          </label>
+        </div>
+      ))}
+    </div>
   );
 };
 
